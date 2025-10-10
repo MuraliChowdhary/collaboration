@@ -1,0 +1,13 @@
+# Ignore local dependencies, they will be installed inside the container
+node_modules
+**/node_modules
+
+# Ignore build artifacts, they will be generated inside the container
+dist
+**/dist
+.turbo
+
+# Ignore Git and environment files
+.git
+.gitignore
+*.env

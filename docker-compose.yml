@@ -1,0 +1,174 @@
+# version: '3.8'
+
+# services:
+#   postgres:
+#     image: postgres:15
+#     container_name: collab-postgres
+#     environment:
+#       POSTGRES_USER: user
+#       POSTGRES_PASSWORD: password
+#       POSTGRES_DB: collabdb
+#     ports:
+#       - "5432:5432"
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#     healthcheck:
+#       test: ["CMD-SHELL", "pg_isready -U user"]
+#       interval: 3s
+#       timeout: 3s
+#       retries: 10
+#       start_period: 10s
+
+#   redis:
+#     image: redis:7
+#     container_name: collab-redis
+#     ports:
+#       - "6379:6379"
+#     volumes:
+#       - redis_data:/data
+
+#   # Migration service - runs once to set up the database
+#   prisma-migrate:
+#     build:
+#       context: .
+#       dockerfile: ./apps/auth-service/Dockerfile
+#     container_name: collab-prisma-migrate
+#     environment:
+#       - DATABASE_URL=postgresql://user:password@postgres:5432/collabdb?schema=public
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+#     working_dir: /app/packages/database
+#     command: ["pnpm", "exec", "prisma", "migrate", "deploy"]
+#     restart: "no"
+
+#   auth-service:
+#     build:
+#       context: .
+#       dockerfile: ./apps/auth-service/Dockerfile
+#     container_name: collab-auth-service
+#     ports:
+#       - "3001:3001"
+#     environment:
+#       - DATABASE_URL=postgresql://user:password@postgres:5432/collabdb?schema=public
+#       - PORT=3001
+#       - JWT_SECRET=your-super-secret-and-long-string-for-jwt
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+#       prisma-migrate:
+#         condition: service_completed_successfully
+#     restart: unless-stopped
+
+#   api-gateway:
+#     build:
+#       context: .
+#       dockerfile: ./apps/api-gateway/Dockerfile
+#     container_name: collab-api-gateway
+#     ports:
+#       - "3000:3000"
+#     environment:
+#       - PORT=3000
+#       - AUTH_SERVICE_URL=http://auth-service:3001
+#     depends_on:
+#       - auth-service
+#     restart: unless-stopped
+
+# volumes:
+#   postgres_data:
+#   redis_data:
+
+
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: collab-postgres
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: collabdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - collab-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7
+    container_name: collab-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - collab-network
+
+  prisma-migrate:
+    build:
+      context: .
+      dockerfile: ./apps/auth-service/Dockerfile
+    container_name: collab-prisma-migrate
+    environment:
+      - DATABASE_URL=postgresql://user:password@postgres:5432/collabdb?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    working_dir: /app/packages/database
+    command: ["pnpm", "exec", "prisma", "migrate", "deploy"]
+    restart: "no"
+    networks:
+      - collab-network
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: ./apps/auth-service/Dockerfile
+    container_name: collab-auth-service
+    ports:
+      - "3001:3001"
+    environment:
+      - DATABASE_URL=postgresql://user:password@postgres:5432/collabdb?schema=public
+      - PORT=3001
+      - JWT_SECRET=your-super-secret-and-long-string-for-jwt
+    depends_on:
+      postgres:
+        condition: service_healthy
+      prisma-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - collab-network
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./apps/api-gateway/Dockerfile
+    container_name: collab-api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - AUTH_SERVICE_URL=http://auth-service:3001
+    depends_on:
+      - auth-service
+    restart: unless-stopped
+    networks:
+      - collab-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  collab-network:
+    driver: bridge
