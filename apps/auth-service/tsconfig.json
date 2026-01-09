@@ -1,13 +1,26 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "es2016",
-    "module": "commonjs",
-    "rootDir": "./src",        // Your source code is in the 'src' folder
-    "outDir": "./dist",        // Output compiled JavaScript to the 'dist' folder
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    "strict": true,
+    "isolatedModules": true,
+    "exactOptionalPropertyTypes": true,
+
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "strict": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+
+    /* 🔑 THIS IS THE KEY */
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationMap": true,
+    "sourceMap": false
   },
-  "include": ["src/**/*"]  
+  "include": ["src/**/*"]
 }

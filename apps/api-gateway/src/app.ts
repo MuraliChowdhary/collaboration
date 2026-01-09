@@ -1,39 +1,38 @@
-import express, { Request, Response } from "express";
-import { createProxyMiddleware } from "http-proxy-middleware";
+// import express, { Request, Response } from "express";
+// import { createProxyMiddleware } from "http-proxy-middleware";
 
-const app = express();
-app.use(express.json());
+// const app = express();
+// // app.use(express.json());
 
-// Logging
-app.use((req: Request, _res, next) => {
-  console.log(`[Gateway] ${req.method} ${req.originalUrl}`);
-  next();
-});
+// // Logging
+// app.use((req: Request, _res, next) => {
+//   console.log(`[Gateway] ${req.method} ${req.originalUrl}`);
+//   next();
+// });
 
-// Health
-app.get("/health", (_req, res: Response) => {
-  res.json({ message: "API Gateway is healthy" });
-});
+// // Health
+// app.get("/health", (_req, res: Response) => {
+//   res.json({ message: "API Gateway is healthy" });
+// });
 
-// Proxy
-app.use(
-  "/api/v1/auth",
-  createProxyMiddleware({
-    target: "http://localhost:3001",
-    changeOrigin: true,
-    secure: false,
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120",
-    },
-     pathRewrite:() => '/health',
-  })
-);
+// // Proxy
+// app.use(
+//   "/api/v1/auth",
+//   createProxyMiddleware({
+//     target: "http://localhost:3001",
+//     changeOrigin: true,
+//     secure: false,
+//     pathRewrite: {
+//       "^/api/v1/auth": "",
+//     },
+//     logger: console,
+//   })
+// );
 
-export default app;
+// export default app;
 
 
-// src/app.ts
+// // src/app.ts
 // import express, { Request, Response } from "express";
 // import cors from "cors";
 // import { API_GATEWAY_CONFIG } from "./config/gateway.config";
@@ -98,3 +97,80 @@ export default app;
 // });
 
 // export default app;
+
+
+
+
+import express, { Request, Response } from "express";
+import cors from "cors";
+import { createProxyMiddleware } from "http-proxy-middleware";
+import { API_GATEWAY_CONFIG } from "./config/gateway.config";
+import { authMiddleware } from "./middlewares/auth.middleware";
+
+const app = express();
+ 
+app.use(cors(API_GATEWAY_CONFIG.middleware.cors));
+
+app.use((req, _res, next) => {
+  console.log(`[Gateway] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+app.get("/health", (_req: Request, res: Response) => {
+  res.json({ message: "API Gateway is healthy" });
+});
+ 
+const authService = API_GATEWAY_CONFIG.services.auth;
+const authPrefix = `${API_GATEWAY_CONFIG.baseUrl}${authService.prefix}`;
+
+app.use(
+  authPrefix,
+  createProxyMiddleware({
+    target: authService.url,
+    changeOrigin: true,
+    secure: false,
+    pathRewrite: {
+      [`^${authPrefix}`]: "",
+    },
+    logger: console,
+  })
+);
+
+/**
+ * ─────────────────────────────────────────
+ * 2️⃣ PROTECTED SERVICES (GENERIC)
+ * ─────────────────────────────────────────
+ */
+app.use(authMiddleware);
+
+Object.entries(API_GATEWAY_CONFIG.services).forEach(
+  ([serviceName, config]) => {
+    if (serviceName === "auth") return;
+
+    const prefix = `${API_GATEWAY_CONFIG.baseUrl}${config.prefix}`;
+
+    console.log(`[Gateway] Proxy ${serviceName}: ${prefix} → ${config.url}`);
+
+    app.use(
+      prefix,
+      createProxyMiddleware({
+        target: config.url,
+        changeOrigin: true,
+        secure: false,
+        pathRewrite: {
+          [`^${prefix}`]: "",
+        },
+        logger: console,
+      })
+    );
+  }
+);
+
+/**
+ * 404
+ */
+app.use((_req: Request, res: Response) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
+export default app;

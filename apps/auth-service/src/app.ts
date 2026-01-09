@@ -1,64 +1,75 @@
-import express, { Application, Request, Response, NextFunction } from 'express';
+// apps/auth-service/src/app.ts
+
+import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
-import { StatusCodes } from 'http-status-codes';
-import { authRouter } from './modules/auth/auth.route';
-import { prisma } from '@repo/database';
+import helmet from 'helmet';
+import compression from 'compression';
+import cookieParser from 'cookie-parser';
+import morgan from 'morgan';
+import { errorHandler } from '@repo/shared';
+import { httpLogStream } from '@repo/shared';
+import authRoutes from './routes/auth.routes';
 
-const app: Application = express();
+/**
+ * Create Express Application
+ */
+export function createApp(): Application {
+  const app = express();
 
-// Middleware
-app.options("*", cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+  // ============================================
+  // SECURITY MIDDLEWARE
+  // ============================================
+  app.use(helmet()); // Security headers
+  app.use(
+    cors({
+      origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000'],
+      credentials: true,
+    })
+  );
 
-// Log all incoming requests
-app.use((req, res, next) => {
-  console.log(`[Auth Service] ${req.method} ${req.path}`);
-  next();
-});
-
-app.post("/login",async (req, res) => {
-  const { email, password } = req.body;
-  console.log("[Auth Service] Login attempt:", { email, password: password ? '****' : undefined });
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    console.log("[Auth Service] User not found:", email);
-     res.status(StatusCodes.UNAUTHORIZED).json({ message: "Invalid credentials" });
-     return;
-  }
-
-  const isPasswordValid = password === user.passwordHash; // Simplified for example purposes
-  if (!isPasswordValid) {
-    console.log("[Auth Service] Invalid password for user:", email);
-    res.status(StatusCodes.UNAUTHORIZED).json({ message: "Invalid credentials" });
-    return;
-  }
-
-  console.log("[Auth Service] Body:", req.body);
-  res.json({ message: "Login received!" });
-});
-
-
-// Health checks
-app.get("/health", (req, res) => {
-  res.json({ message: "Auth service is healthy" });
-});
-
-app.get('/healthcheck', (req: Request, res: Response) => {
-  res.status(StatusCodes.OK).json({ message: 'Auth service is healthy and running!' });
-});
-
-console.log('Auth service initialized.');
-// API Routes
-app.use('/', authRouter);
-
-// Global Error Handler
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error('Error:', err.stack);
-  res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-    error: 'Something went wrong!',
-    message: err.message 
+  app.get('/api/v1/health', (_req: Request, res: Response) => {
+    res.send('Auth Service is running');
   });
-});
 
-export default app; 
+  // ============================================
+  // GENERAL MIDDLEWARE
+  // ============================================
+  app.use(compression()); // Compress responses
+  app.use(express.json({ limit: '10mb' })); // Parse JSON bodies
+  app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Parse URL-encoded bodies
+  app.use(cookieParser()); // Parse cookies
+
+  // ============================================
+  // LOGGING
+  // ============================================
+  if (process.env.NODE_ENV === 'development') {
+    app.use(morgan('dev'));
+  } else {
+    app.use(morgan('combined', { stream: httpLogStream }));
+  }
+
+  // ============================================
+  // HEALTH CHECK
+  // ============================================
+  app.get('/health', (_req: Request, res: Response) => {
+    res.status(200).json({
+      success: true,
+      message: 'Auth service is healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+    });
+  });
+
+  // ============================================
+  // API ROUTES
+  // ============================================
+  app.use('/api/v1/auth', authRoutes);
+
+  // ============================================
+  // ERROR HANDLING
+  // ============================================
+//   app.use(notFoundHandler); // 404 handler
+  app.use(errorHandler); // Global error handler
+
+  return app;
+}
